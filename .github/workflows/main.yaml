@@ -41,7 +41,7 @@ jobs:
       if: needs.check.outputs.guacamole_version != ''
       uses: docker/setup-buildx-action@v2
       
-    - name: docker build guacamole
+    - name: docker build guacd
       if: needs.check.outputs.guacamole_version != ''
       env:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}   
