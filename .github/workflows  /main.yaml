@@ -1,0 +1,49 @@
+name: Docker guacamole 
+
+on:
+  schedule:
+    - cron:  '0 0 * * FRI'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      guacamole_version: ${{ steps.new_version_check.outputs.guacamole_version }}
+    steps:
+      - name: new check version
+        id: new_version_check
+        run: |
+          releases=$(curl -s "https://api.github.com/repos/apache/guacamole-server/tags?per_page=1")
+          [[ $releases == *RC* ]] && releases=""
+          echo "guacamole_version=$(echo $releases | jq -r .[].name )" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: docker login
+      if: needs.check.outputs.guacamole_version != ''
+      run: |
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login --username ${{ secrets.DOCKER_USER }} --password-stdin 
+    - name: docker buildx multiarch
+      if: needs.check.outputs.guacamole_version != ''
+      run: |
+        docker buildx create --name multiarch
+        docker buildx use multiarch
+        docker buildx inspect --bootstrap
+    - name: Set up QEMU
+      if: needs.check.outputs.guacamole_version != ''
+      uses: docker/setup-qemu-action@v2
+
+    - name: Set up Docker Buildx
+      if: needs.check.outputs.guacamole_version != ''
+      uses: docker/setup-buildx-action@v2
+      
+    - name: docker build guacamole
+      if: needs.check.outputs.guacamole_version != ''
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}   
+      run: |
+        docker buildx build ./  -t $DOCKER_USER/guacd:latest -t $DOCKER_USER/guacd:${{ needs.check.outputs.guacamole_version }} --platform linux/amd64,linux/arm/v7,linux/arm64/v8 --push
